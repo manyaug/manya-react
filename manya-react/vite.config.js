@@ -43,7 +43,9 @@ export default defineConfig({
         // Audio files use HTTP Range requests (206 Partial Content) which
         // the Cache Storage API cannot handle. Including them causes the fatal
         // ERR_CACHE_OPERATION_NOT_SUPPORTED error loop.
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        globPatterns: ['**/*.{js,css,html,ico,svg,webp}'],
+        // Allow large image assets without failing the build
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           // DiceBear avatars - Cache First (SVG content, safe to cache)
