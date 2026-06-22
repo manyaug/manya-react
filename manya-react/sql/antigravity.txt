@@ -1,0 +1,83 @@
+# Implementation Plan — Offline Sync & Debug Pass
+
+This plan addresses the offline synchronization and loading issues for User Profile, Coins, Gems, and Questions in the Manya hybrid MAUI application.
+
+---
+
+## Findings & Root Causes
+
+1. **Missing Profiles `id` Column Mapping**:
+   - React components expect profiles to have an `id` column.
+   - The local C# `DatabaseService` redirects all `"profiles"` queries to the `"users"` table.
+   - The `"users"` table only has a `uid` column and no `id` column. As a result, when profiles are queried locally, `cloudProfile.id` is returned as `undefined`, which breaks subsequent React UI calls.
+   - **Fix**: Modify `DatabaseService.DbGet` to map the `uid` column to `id` in any results returned for a `"profiles"` query.
+
+2. **Column Mismatch Sync Crashes (Coins/Gems/Balances)**:
+   - Supabase PostgREST tables (like `user_balances`, `badges`, etc.) return extra columns (e.g., `created_at`) that are not present in the local SQLite tables.
+   - When the sync/seed service tries to write downloaded rows into SQLite using `DbInsert` or `DbUpsert`, it includes these extra columns. This causes a SQLite syntax error (`no such column: ...`), failing the transaction.
+   - **Fix**: Add dynamic column schema caching to `DatabaseService` and automatically filter out any keys from insert/upsert/patch payloads that do not exist as columns in the target SQLite table.
+
+3. **Missing Question Tables**:
+   - React queries questions via `db:/questions?subject=math`. The C# `DatabaseService` resolves this to `questions_math` (or `questions_science`, etc.).
+   - However, the local SQLite database only defines the `questions` table and does not create the subject-specific tables (`questions_math`, `questions_science`, `questions_english`, `questions_sst`). This results in a "no such table" error.
+   - **Fix**: Add DDL statements to `DbInitializer.cs` to create these four subject-specific question tables.
+
+4. **Missing Question Seeding Logic**:
+   - `SeedService.cs` contains no download or seeding loop for curriculum questions. Questions were never being pulled from the cloud to SQLite.
+   - **Fix**: Add a `SeedQuestionsAsync` method in `SeedService.cs` to download questions from Supabase for all four subjects, insert them into SQLite, and log counts.
+
+5. **User Mapping Alignment**:
+   - Ensure the authenticated Supabase user ID maps correctly across all queries.
+   - **Verification**: `schemaMapper.js` maps `uid` to `user_id` for most foreign key tables, and C# `BuildSelectSql` correctly maps filters for `user_id` / `uid`. With the `id` -> `uid` mapping fixed for profiles, user mapping is fully aligned.
+
+6. **Deep Logging Requirements**:
+   - The audit requires structured output logs for each synchronized table during seeding.
+   - **Fix**: Implement structured log statements in `SeedService` matching the requested format:
+     ```
+     SYNC START: <table_name>
+     DOWNLOAD COUNT: <n>
+     INSERT COUNT: <n>
+     QUERY COUNT: <n>
+     SYNC COMPLETE: <table_name>
+     ```
+
+---
+
+## Proposed Changes
+
+### C# MAUI Backend
+
+#### [MODIFY] [DbInitializer.cs](file:///e:/manya-react/ManyaApp/ManyaApp/Services/DbInitializer.cs)
+- Add DDL statements inside `EnsureLocalSchemaAsync` to create `questions_math`, `questions_science`, `questions_english`, and `questions_sst` tables.
+
+#### [MODIFY] [DatabaseService.cs](file:///e:/manya-react/ManyaApp/ManyaApp/Services/DatabaseService.cs)
+- Add `_tableColumnsCache` to cache columns per SQLite table.
+- Implement `GetTableColumnsAsync(string tableName)` to query `PRAGMA table_info` and return a set of column names.
+- Update `DbInsert`, `DbUpsert`, and `DbPatch` to filter incoming payload dictionaries, stripping any keys that are not columns in the target SQLite table.
+- Update `DbGet` to automatically add `r["id"] = r["uid"]` to any rows returned when querying `"profiles"` table.
+
+#### [MODIFY] [SeedService.cs](file:///e:/manya-react/ManyaApp/ManyaApp/Services/SeedService.cs)
+- Add `SeedQuestionsAsync(HttpClient http)` method to download questions for all four subjects from Supabase and insert them into local SQLite.
+- Update `SeedFromCloudAsync` to call `SeedQuestionsAsync(http)`.
+- Update all seed methods (`SeedProfileAsync`, `SeedTableAsync`, `SeedBalancesAsync`, `SeedQuestProgressAsync`, `SeedChallengesAsync`, `SeedUserChallengesAsync`, `SeedManyaVaultAsync`) to log their synchronization progress using the required format:
+  ```
+  SYNC START: <table_name>
+  DOWNLOAD COUNT: <n>
+  INSERT COUNT: <n>
+  QUERY COUNT: <n>
+  SYNC COMPLETE: <table_name>
+  ```
+
+---
+
+## Verification Plan
+
+### Automated Tests
+1. Re-build the MAUI project to verify no compilation errors.
+2. Run the C# database checker tool (`DbChecker`) to verify the new schemas and row counts.
+
+### Manual Verification
+1. Launch the app and log in.
+2. Verify C# debugger outputs detailed sync logs for all tables.
+3. Validate that User profile, coins, gems, and questions are displayed correctly in the React UI inside the WebView.
+4. Put the device/emulator in airplane mode (offline), restart the app, and confirm that the user dashboard, balances, and question views continue to load data from SQLite.

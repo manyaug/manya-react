@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta id="viewport-meta" name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      // Shrink UI on narrow Android devices to match iPhone layout proportions
+      if (window.screen && window.screen.width < 390) {
+        document.getElementById('viewport-meta').setAttribute('content', 'width=390, viewport-fit=cover');
+      }
+    </script>
+
+    <!-- App Meta (no PWA manifest — handled by MAUI shell) -->
+    <meta name="theme-color" content="#7c3aed" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Manya" />
+    <meta name="application-name" content="Manya Prep Hub" />
+    <meta name="description" content="Elite PLE Prep for Uganda Primary Leaving Examinations" />
+
+    <!-- Favicon — relative path for MAUI WebView -->
+    <link rel="icon" type="image/x-icon" href="./assets/icons/favicon.ico" />
+
+    <!-- Google Fonts — loaded online; falls back gracefully when offline -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bubblegum+Sans&family=Fredoka:wght@400;500;600;700&family=Nunito:wght@600;700;800;900&family=Roboto:wght@700;900&family=Sour+Gummy:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+
+    <title>Manya Prep Hub</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Entry point: manya-maui/src/main.jsx (MAUI boot with runMigrations) -->
+    <script type="module" src="./src/main.jsx"></script>
+  </body>
+</html>
